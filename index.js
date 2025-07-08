@@ -4,6 +4,10 @@ import session from 'express-session'
 import passport from 'passport'
 import { Strategy as OIDCStrategy } from "passport-openidconnect"
 
+function pick(obj, properties) {
+    return Object.fromEntries(Object.entries(obj).filter(([key]) => properties.includes(key)))
+}
+
 dotenv.config()
 
 const app = express()
@@ -24,7 +28,8 @@ app.use(passport.session())
 // Instead of storing the full profile in the cookie, we keep just the id &
 // provider. You can expand this with a DB lookup if you have a user model.
 passport.serializeUser((user, done) => {
-    done(null, { id: user.id, provider: user.provider, name: user.displayName });
+    const a = user._json
+    done(null, user);
 });
 
 passport.deserializeUser((obj, done) => {
@@ -49,10 +54,13 @@ providers.forEach(({ name, ...cfg }) => {
         name,
         new OIDCStrategy({
             ...cfg,
-            scope: ['openid'],
+            scope: 'openid profile',
             passReqToCallback: false,
         },
-            (issuer, profile, cb) => {
+            // (issuer, profile, cb) => {
+            // NOTE: Important to have all args. Otherwise _json is not available
+            (issuer, uiProfile, idProfile, context, idToken, accessToken, refreshToken, params, cb) => {
+                const tst = uiProfile._json
                 /*
                  * This verify callback is invoked after the provider has authenticated
                  * the user and returned profile information.
@@ -64,8 +72,9 @@ providers.forEach(({ name, ...cfg }) => {
                  *
                  * Here we simply add the provider name to the profile and return it.
                  */
-                profile.provider = name; // Tag the profile with its source
-                return cb(null, profile);
+
+                const user = { id: uiProfile.id, ...pick(uiProfile._json, ['id', 'name', 'isSupport']), provider: name }
+                return cb(null, user);
             }),
     )
 })
@@ -97,7 +106,7 @@ app.get("/auth/:provider/callback", (req, res, next) => {
     if (!providers.find(p => p.name === provider)) return res.status(404).send("Unknown provider");
     passport.authenticate(provider, {
         failureRedirect: "/",
-        successRedirect: "/profile"
+        successRedirect: "/"
     })(req, res, next);
 });
 
