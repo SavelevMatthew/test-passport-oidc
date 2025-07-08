@@ -24,7 +24,7 @@ app.use(passport.session())
 // Instead of storing the full profile in the cookie, we keep just the id &
 // provider. You can expand this with a DB lookup if you have a user model.
 passport.serializeUser((user, done) => {
-    done(null, { id: user.id, provider: user.provider });
+    done(null, { id: user.id, provider: user.provider, name: user.displayName });
 });
 
 passport.deserializeUser((obj, done) => {
